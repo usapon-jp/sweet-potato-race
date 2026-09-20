@@ -5,7 +5,9 @@ const $=id=>document.getElementById(id), canvas=$('world'), ctx=canvas.getContex
 const images={}, W=1280,H=720,lanes=[326,441,556];
 let selected='brown',order=[],round=0,race=null,view='selection',last=0,accumulator=0,particles=[],noticeUntil=0,ready=false;
 let backgroundClock=0,finishShown=false,pausePrevious='racing';
-const portraits={};
+let manualLandscape=false;
+function orientationBlocked(){return matchMedia('(orientation: portrait)').matches&&!manualLandscape;}
+$('play-rotated').onclick=()=>{manualLandscape=true;document.body.classList.add('manual-landscape');if(view==='paused')resume();};
 const char=id=>CHARACTERS.find(c=>c.id===id);
 function toggle(id,show){$(id).hidden=!show;}
 function makePortrait(id){
@@ -59,7 +61,7 @@ function finish(){
 function pause(){if(!race||view!=='race'||race.state==='finished'||race.state==='paused')return;pausePrevious=race.state;race.state='paused';view='paused';
  showDialog('ひとやすみ','一時停止','準備ができたら、続きをどうぞ。','つづける',resume,false);
 }
-function resume(){if(matchMedia('(orientation: portrait)').matches||document.hidden)return;race.state=pausePrevious;view='race';toggle('dialog',false);toggle('controls',true);last=performance.now();accumulator=0;}
+function resume(){if(orientationBlocked()||document.hidden)return;race.state=pausePrevious;view='race';toggle('dialog',false);toggle('controls',true);last=performance.now();accumulator=0;}
 function input(action){if(view!=='race'||!race)return;if(action==='jump')race.jump(race.player);else race.move(race.player,action==='up'?-1:1);}
 for(const id of ['up','down','jump']){
  $(id).addEventListener('pointerdown',e=>{e.preventDefault();$(id).setPointerCapture(e.pointerId);input(id);});
@@ -73,7 +75,7 @@ addEventListener('keydown',e=>{
 });
 $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement){await document.exitFullscreen();}else{await $('game').requestFullscreen();try{await screen.orientation.lock('landscape');}catch{}}}catch{$('fullscreen').textContent='⛶';}};
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});addEventListener('blur',pause);
-matchMedia('(orientation: portrait)').addEventListener('change',e=>{if(e.matches)pause();});
+matchMedia('(orientation: portrait)').addEventListener('change',e=>{if(e.matches&&!manualLandscape)pause();});
 function ellipse(x,y,rx,ry,color){ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fill();}
 function rounded(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
 function flower(x,y,size=1){for(let i=0;i<5;i++){const a=i*Math.PI*2/5;ellipse(x+Math.cos(a)*7*size,y+Math.sin(a)*7*size,5*size,5*size,'#fffbe2');}ellipse(x,y,4*size,4*size,'#f8db67');}
@@ -139,7 +141,7 @@ function render(){const camera=race?race.player.x-300:backgroundClock*18;meadow(
  if(backgroundClock>noticeUntil)$('status-text').textContent='';
 }
 function frame(now){const dt=last?Math.min((now-last)/1000,.05):0;last=now;
- const frozen=view==='paused'||document.hidden||matchMedia('(orientation: portrait)').matches;
+ const frozen=view==='paused'||document.hidden||orientationBlocked();
  if(!frozen){backgroundClock+=dt;if(race&&view==='race'){accumulator+=dt;while(accumulator>=1/120){race.update(1/120);accumulator-=1/120;}consumeEvents();if(race.state==='finished'&&!finishShown)finish();}
  for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=500*dt;p.life-=dt;}particles=particles.filter(p=>p.life>0);}
  render();requestAnimationFrame(frame);

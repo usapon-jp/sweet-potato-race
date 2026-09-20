@@ -2,12 +2,12 @@
 // from browser screenshots and physical touch acceptance.
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');const path=require('node:path');
 const root=path.join(__dirname,'..');
-async function app(){
+async function app(portrait=false){
  const elements=new Map(),context2d=new Proxy({createLinearGradient:()=>({addColorStop(){}})},{get:(t,k)=>t[k]||(()=>{})});
  function el(){return {hidden:false,textContent:'',style:{},dataset:{},children:[],listeners:{},attrs:{},classList:{add(){},remove(){}},append(...v){this.children.push(...v)},replaceChildren(...v){this.children=v},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,f){this.listeners[k]=f},getContext(){return context2d},focus(){},setPointerCapture(){}};}
  const document={hidden:false,body:el(),getElementById(id){if(!elements.has(id))elements.set(id,el());return elements.get(id)},createElement:el,querySelectorAll(){return elements.get('characters').children},addEventListener(){}};
  class Image{set src(v){this.onload();}}
- const sandbox={document,console,Image,performance:{now:()=>0},requestAnimationFrame(){},addEventListener(){},matchMedia:()=>({matches:false,addEventListener(){}}),Math:Object.create(Math)};
+ const sandbox={document,console,Image,performance:{now:()=>0},requestAnimationFrame(){},addEventListener(){},matchMedia:()=>({matches:portrait,addEventListener(){}}),Math:Object.create(Math)};
  sandbox.Math.random=require('../engine.js').seeded(81);sandbox.window=sandbox;
  const c=vm.createContext(sandbox);for(const f of ['engine.js','assets/bounds.js','game.js'])vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),c);
  await new Promise(setImmediate);return {run:s=>vm.runInContext(s,c),elements,snapshot:()=>c.raceSnapshot()};
@@ -24,3 +24,5 @@ test('four wins advance through distinct rivals to championship and restart',asy
 });
 test('losing retry preserves opponent, order, and prior wins; choose again resets UI',async()=>{const a=await app();a.run('startTournament();round=2;startRace()');const before=a.snapshot();a.run("race.winner=race.opponent.id;race.state='finished';finish()");assert.equal(a.elements.get('continue').textContent,'同じ相手に再挑戦');a.elements.get('continue').onclick();assert.equal(a.snapshot().round,2);assert.deepEqual(a.snapshot().order,before.order);assert.equal(a.snapshot().opponent.id,before.opponent.id);a.elements.get('back').onclick();assert.equal(a.snapshot().view,'selection');assert.equal(a.snapshot().player,null);});
 test('pause/resume restores countdown or racing, and control handlers affect the car',async()=>{const a=await app();a.run('startTournament();pause()');assert.equal(a.snapshot().state,'paused');a.run('resume()');assert.equal(a.snapshot().state,'countdown');a.run("race.state='racing'");const e={preventDefault(){},pointerId:1};a.elements.get('up').listeners.pointerdown(e);assert.equal(a.snapshot().player.lane,0);a.elements.get('down').listeners.pointerdown(e);assert.equal(a.snapshot().player.lane,1);a.elements.get('jump').listeners.pointerdown(e);assert.ok(a.snapshot().player.vz>0);a.run('pause();resume()');assert.equal(a.snapshot().state,'racing');});
+
+test('portrait fallback unblocks the race and pause/resume without OS rotation',async()=>{const a=await app(true);assert.equal(a.run('orientationBlocked()'),true);a.elements.get('play-rotated').onclick();assert.equal(a.run('orientationBlocked()'),false);a.run('startTournament();frame(100);frame(150)');assert.ok(a.run('race.countdown')<2.6);a.run('pause();resume()');assert.equal(a.snapshot().state,'countdown');a.run("race.state='racing'");a.elements.get('down').listeners.pointerdown({preventDefault(){},pointerId:1});assert.equal(a.snapshot().player.lane,2);});

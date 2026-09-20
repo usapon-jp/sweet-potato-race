@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#c5ea7b"><title>さつまいもカーレース</title>
-<link rel="icon" href="data:,"><link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:,"><link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <main id="game" aria-label="さつまいもカーレース">
@@ -26,6 +26,6 @@
   <button id="fullscreen" class="fullscreen" aria-label="全画面表示">⛶</button>
   <span id="keyboard-hint">↑ ↓ レーン移動　Space ジャンプ</span>
 </main>
-<div id="rotate"><div class="rotate-phone">↻</div><h2>横向きにして遊んでね</h2><p>画面を横にするとレースが始められます。</p></div>
-<script src="assets/bounds.js"></script><script src="engine.js"></script><script src="game.js"></script>
+<div id="rotate"><div class="rotate-phone">↻</div><h2>横向きにして遊んでね</h2><p>回転できないときは、下のボタンで遊べます。</p><button id="play-rotated" class="rotate-start">このまま横画面で遊ぶ</button></div>
+<script src="assets/bounds.js"></script><script src="engine.js"></script><script src="game.js?v=2"></script>
 </body></html>
