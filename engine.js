@@ -39,7 +39,10 @@
         const lane=Math.floor(this.rng()*3), n=this.rng();
         if(n<.22) {
           this.items.push({type:'ramp',x,lane},{type:'rock',x:x+205,lane});
-          this.items.push({type:'acorn',x:x+170,lane,z:90});
+          // This sits on the high part of a ramp jump, rather than at road level.
+          // The flag gives it a generous airborne pickup volume so a clean ramp
+          // launch is rewarding even when the car is boosted into the next ramp.
+          this.items.push({type:'acorn',x:x+170,lane,z:170,rampBonus:true});
         } else {
           this.items.push({type:n<.60?'rock':'acorn',x,lane});
           this.items.push({type:'acorn',x:x+135,lane:(lane+1+Math.floor(this.rng()*2))%3});
@@ -55,7 +58,11 @@
     emit(type,r,extra={}) {this.events.push({type,id:r.id,x:r.x,y:r.y,...extra});}
     move(r,dir) {if(this.state==='racing')r.lane=Math.max(0,Math.min(2,r.lane+dir));}
     jump(r, ramp=false) {
-      if(this.state!=='racing'||r.z>1||r.vz>0) return false;
+      if(this.state!=='racing') return false;
+      // A ramp must relaunch a car that is still airborne from a previous ramp.
+      // Otherwise a boosted car can reach the next ramp before landing, skip it,
+      // and land in the rock that follows.
+      if(!ramp&&(r.z>1||r.vz>0)) return false;
       r.vz=ramp?680:550; r.jumps++; this.emit(ramp?'ramp':'jump',r); return true;
     }
     hit(r) {
@@ -118,15 +125,21 @@
       [this.player,this.opponent].forEach((r,ri)=>{
         for(const it of this.items) {
           if(it.taken||it.seen.has(r.id)||(it.owner&&it.owner!==r.id))continue;
-          const crossed=old[ri]-it.x<35&&r.x-it.x>=-35;
-          if(crossed&&Math.abs(it.lane-r.y)<.35) interactions.push({r,it,t:(it.x-35-old[ri])/(r.x-old[ri])});
+          const reach=35;
+          const crossed=old[ri]-it.x<reach&&r.x-it.x>=-reach;
+          if(crossed&&Math.abs(it.lane-r.y)<.42) interactions.push({r,it,t:(it.x-reach-old[ri])/(r.x-old[ri])});
         }
       });
       interactions.sort((a,b)=>a.t-b.t).forEach(({r,it})=>{
         if(it.taken)return;it.seen.add(r.id);
-        if(['acorn','gold','help'].includes(it.type)&&Math.abs(r.z-(it.z||0))<62)this.collect(r,it);
+        if(['acorn','gold','help'].includes(it.type)) {
+          // Ramp rewards follow the flight arc and should not be narrowly missed
+          // because a frame reaches the pickup a little before or after its apex.
+          const verticalReach=it.rampBonus?150:78;
+          if(Math.abs(r.z-(it.z||0))<verticalReach)this.collect(r,it);
+        }
         if(it.type==='rock'&&r.z<48)this.hit(r);
-        if(it.type==='ramp'&&r.z<10)this.jump(r,true);
+        if(it.type==='ramp')this.jump(r,true);
       });
       const p=this.player,o=this.opponent;
       if(Math.abs(p.x-o.x)<70&&Math.abs(p.y-o.y)<.43&&Math.abs(p.z-o.z)<50&&p.invincible===0&&o.invincible===0){this.hit(p);this.hit(o);}
