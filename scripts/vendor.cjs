@@ -1,0 +1,10 @@
+const fs=require('node:fs');
+const path=require('node:path');
+const esbuild=require('esbuild');
+const root=path.resolve(__dirname,'..');
+fs.mkdirSync(path.join(root,'vendor'),{recursive:true});
+esbuild.buildSync({entryPoints:[path.join(root,'node_modules/@supabase/supabase-js/dist/index.mjs')],bundle:true,platform:'browser',format:'iife',globalName:'supabase',target:['safari15','chrome100'],minify:true,legalComments:'eof',outfile:path.join(root,'vendor/supabase.js')});
+fs.copyFileSync(path.join(root,'node_modules/qrcode-generator/dist/qrcode.js'),path.join(root,'vendor/qrcode.js'));
+fs.writeFileSync(path.join(root,'vendor/README.txt'),'Generated from locked npm dependencies.\n@supabase/supabase-js 2.116.0 (MIT)\nqrcode-generator 2.0.4 (MIT; license in qrcode.js)\nRegenerate: node scripts/vendor.cjs\n');
+fs.copyFileSync(path.join(root,'node_modules/@supabase/supabase-js/LICENSE'),path.join(root,'vendor/supabase-LICENSE'));
+console.log('Prepared pinned browser libraries.');

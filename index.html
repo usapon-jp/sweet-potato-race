@@ -3,18 +3,27 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#c5ea7b"><title>さつまいもカーレース</title>
-<link rel="icon" href="data:,"><link rel="stylesheet" href="style.css?v=3">
+<link rel="icon" href="data:,"><link rel="stylesheet" href="style.css?v=20260920-mp2">
 </head>
 <body>
 <main id="game" aria-label="さつまいもカーレース">
   <canvas id="world" width="1280" height="720" aria-label="野原の3レーンレース"></canvas>
   <section id="selection" class="screen">
-    <div class="intro"><span class="eyebrow">うさぽんの野原で、よーいどん。</span><h1>さつまいもカーレース</h1><p>いっしょに走るうさぎを選んでね</p></div>
-    <div id="characters" role="group" aria-label="うさぎを選択"></div>
-    <div class="select-bottom"><p>上下で3レーン移動 · ジャンプで岩をこえよう<br><span>どんぐりで加速。4匹に勝ったら優勝！</span></p><button id="start" class="primary" disabled>準備中…</button></div>
+    <div class="intro"><span class="eyebrow">うさぽんの野原で、よーいどん。</span><h1>さつまいもカーレース</h1><p>いっしょに走るうさぎさんを選んでね</p></div>
+    <div id="characters" role="group" aria-label="うさぎさんを選択"></div>
+    <div id="select-bottom" class="select-bottom"><p>上下で3レーン移動 · ジャンプで岩をこえよう<br><span>どんぐりで加速。4匹に勝ったら優勝！</span></p><div class="start-actions"><button id="start" class="primary" disabled>準備中…</button><button id="multiplayer-start" class="nearby-button" disabled>近くの人と対戦</button></div></div>
+  </section>
+  <section id="multiplayer" class="screen multiplayer-layer" hidden aria-labelledby="multiplayer-title">
+    <div class="multiplayer-card">
+      <span id="multiplayer-kicker" class="eyebrow">近くの人と対戦</span><h2 id="multiplayer-title">うさぎさんを選んでね</h2>
+      <p id="multiplayer-detail">部屋を作ると、QRコードを見せられます。</p>
+      <div id="multiplayer-qr" class="multiplayer-qr" hidden></div>
+      <div id="multiplayer-link" class="multiplayer-link" hidden></div>
+      <div class="multiplayer-actions"><button id="create-room" class="primary">部屋を作る</button><button id="copy-room" class="text-button" hidden>リンクをコピー</button><button id="multiplayer-ready" class="primary" hidden>準備できた</button><button id="multiplayer-cancel" class="text-button">やめる</button></div>
+    </div>
   </section>
   <section id="hud" hidden>
-    <div class="stage"><small>STAGE 1 · <span id="round">1</span> / 4 戦</small><strong>やさしい野原</strong></div>
+    <div class="stage"><small id="stage-label">STAGE 1 · <span id="round">1</span> / 4 戦</small><strong id="stage-name">やさしい野原</strong></div>
     <div class="progress-area"><div class="progress-label"><span id="position">1位</span><span id="rival-name"></span><span>ゴール</span></div><div class="track"><div id="progress-fill"></div><span id="player-dot" class="dot player-dot">自</span><span id="rival-dot" class="dot rival-dot">相</span></div></div>
     <div class="inventory"><span class="acorn-icon" aria-hidden="true"></span><strong id="acorns">0</strong><span id="speed-state">いつもの速さ</span></div>
     <div class="hud-menu"><button id="help" class="small-button" aria-label="あそびかた">?</button><button id="pause" class="small-button" aria-label="一時停止">Ⅱ</button></div>
@@ -22,12 +31,15 @@
   <div id="race-caption" hidden><span id="player-label"></span><span id="status-text" aria-live="polite"></span></div>
   <div id="controls" hidden><div class="lane-buttons"><button id="up" aria-label="上のレーンへ">▲</button><button id="down" aria-label="下のレーンへ">▼</button></div><button id="jump" aria-label="ジャンプ"><span aria-hidden="true">↗</span></button></div>
   <div id="countdown" hidden aria-live="polite"></div>
-  <section id="dialog" class="screen dialog" hidden aria-labelledby="dialog-title"><div class="result-card"><span id="result-kicker" class="eyebrow"></span><h2 id="dialog-title"></h2><div id="result-art"></div><p id="result-detail"></p><div id="wins" class="wins"></div><button id="continue" class="primary"></button><button id="back" class="text-button">うさぎを選びなおす</button></div></section>
+  <section id="dialog" class="screen dialog" hidden aria-labelledby="dialog-title"><div class="result-card"><span id="result-kicker" class="eyebrow"></span><h2 id="dialog-title"></h2><div id="result-art"></div><p id="result-detail"></p><div id="wins" class="wins"></div><button id="continue" class="primary"></button><button id="back" class="text-button">うさぎさんを選びなおす</button></div></section>
   <section id="guide" class="screen guide-layer" hidden aria-labelledby="guide-title"><div class="guide-card"><span id="guide-kicker" class="eyebrow"></span><h2 id="guide-title"></h2><p id="guide-detail"></p><button id="guide-close" class="primary">わかった</button></div></section>
   <span id="jump-tip">このボタンでジャンプ</span>
   <button id="fullscreen" class="fullscreen" aria-label="全画面表示">⛶</button>
   <span id="keyboard-hint">↑ ↓ レーン移動　Space ジャンプ</span>
 </main>
 <div id="rotate"><div class="rotate-phone">↻</div><h2>回転して遊んでね</h2><button id="play-rotated" class="rotate-start">ゲームをはじめる</button></div>
-<script src="assets/bounds.js"></script><script src="engine.js?v=3"></script><script src="game.js?v=4"></script>
+<script src="assets/bounds.js"></script><script src="engine.js?v=20260920-mp2"></script>
+<script src="runtime-config.js?v=20260920-mp2"></script><script src="vendor/qrcode.js"></script>
+<script src="realtime-transport.js?v=20260920-mp2"></script><script src="multiplayer-session.js?v=20260920-mp2"></script>
+<script src="game.js?v=20260920-mp2"></script>
 </body></html>

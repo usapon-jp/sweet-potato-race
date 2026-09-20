@@ -26,12 +26,22 @@
     for (let i=pool.length-1;i>0;i--) {const j=Math.floor(rng()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]];}
     return pool;
   }
-  function racer(id, lane) {return {id,x:0,lane,y:lane,z:0,vz:0,speed:300,acorns:0,boost:0,gold:0,slow:0,invincible:0,aiWait:0,jumps:0,hits:0,collected:0};}
+  function racer(id, lane, slot) {return {id,slot,x:0,lane,y:lane,z:0,vz:0,speed:300,acorns:0,boost:0,gold:0,slow:0,invincible:0,aiWait:0,jumps:0,hits:0,collected:0};}
+  function itemPriority(seed, itemId) { return ((Math.imul((seed|0) ^ Math.imul((itemId|0)+1, 0x9e3779b1), 0x85ebca6b) >>> 0) & 1) === 0 ? 'host' : 'guest'; }
+  function plain(value) {
+    if (value instanceof Set) return Array.from(value);
+    if (Array.isArray(value)) return value.map(plain);
+    if (value && typeof value === 'object') { const out={}; for (const key of Object.keys(value)) out[key]=plain(value[key]); return out; }
+    return value;
+  }
   class Race {
-    constructor(playerId, opponentId, seed=19, round=0) {
-      this.rng=seeded(seed); this.round=Math.max(0,Math.min(3,round)); this.difficulty=DIFFICULTY[this.round]; this.helpCooldown=0; this.nextItemId=1000;
-      this.player=racer(playerId,1); this.opponent=racer(opponentId,0);
-      this.time=0; this.countdown=2.6; this.state='countdown'; this.winner=null; this.events=[];
+    constructor(playerId, opponentId, seed=19, round=0, opts={}) {
+      this.seed=seed|0; this.opts=opts||{}; this.mode=this.opts.mode==='multiplayer'?'multiplayer':'solo'; this.rng=seeded(seed); this.round=Math.max(0,Math.min(3,round)); this.difficulty=DIFFICULTY[this.round]; this.helpCooldown=0; this.nextItemId=1000;
+      const swapped=this.mode==='multiplayer' && this.rng() >= .5;
+      this.player=racer(playerId,this.mode==='multiplayer'?(swapped?2:0):1,this.mode==='multiplayer'?'host':null);
+      this.opponent=racer(opponentId,this.mode==='multiplayer'?(swapped?0:2):0,this.mode==='multiplayer'?'guest':null);
+      this.racers=[this.player,this.opponent]; this.finishTimes=this.mode==='multiplayer'?{host:null,guest:null}:null; this.pendingFinish=null;
+      this.time=0; this.countdown=2.6; this.state='countdown'; this.winner=null; this.winnerSlot=null; this.events=[];
       this.items=[];
       // Every row has at least one clear lane; jumps and lane changes both work.
       this.items.push({type:'acorn',x:620,lane:1},{type:'ramp',x:1180,lane:1},{type:'rock',x:1390,lane:1});
@@ -55,7 +65,8 @@
       }
       this.items.forEach((it,i)=>{it.id=i;it.seen=new Set();it.taken=false;});
     }
-    emit(type,r,extra={}) {this.events.push({type,id:r.id,x:r.x,y:r.y,...extra});}
+    identity(r) { return this.mode==='multiplayer'?r.slot:r.id; }
+    emit(type,r,extra={}) {this.events.push({type,id:this.identity(r),slot:r.slot||undefined,x:r.x,y:r.y,...extra});}
     move(r,dir) {if(this.state==='racing')r.lane=Math.max(0,Math.min(2,r.lane+dir));}
     jump(r, ramp=false) {
       if(this.state!=='racing') return false;
@@ -71,7 +82,7 @@
       this.emit('hit',r,{lost});
     }
     collect(r,it) {
-      if(it.owner&&it.owner!==r.id)return;
+      if(it.owner&&it.owner!==this.identity(r))return;
       it.taken=true;r.acorns++;r.collected++;
       if(it.type==='gold'){r.gold=1.5;r.boost=0;}
       else if(r.gold<=0)r.boost=2.8;
@@ -88,7 +99,7 @@
       // Choose a clear lane, preferring the trailing car's current lane.
       const lane=[r.lane,...[0,1,2].filter(l=>l!==r.lane)].find(l=>!this.items.some(it=>it.type==='rock'&&it.lane===l&&Math.abs(it.x-x)<150));
       if(lane===undefined)return;
-      this.items.push({id:this.nextItemId++,type:'help',x,lane,owner:r.id,spawned:this.time,expires:this.time+4,seen:new Set(),taken:false});
+      this.items.push({id:this.nextItemId++,type:'help',x,lane,owner:this.identity(r),spawned:this.time,expires:this.time+4,seen:new Set(),taken:false});
       this.helpCooldown=6;this.emit('helpSpawn',r);
     }
     think(dt) {
@@ -110,11 +121,11 @@
     update(dt) {
       if(this.state==='finished'||this.state==='paused')return;
       if(this.state==='countdown') {this.countdown-=dt;if(this.countdown<=0)this.state='racing';return;}
-      dt=Math.min(dt,.05); this.time+=dt; this.help(dt); this.think(dt);
+      dt=Math.min(dt,.05); this.time+=dt; this.help(dt); if(this.mode!=='multiplayer')this.think(dt);
       const old=[this.player.x,this.opponent.x];
-      for(const r of [this.player,this.opponent]) {
+      for(const r of this.racers) {
         r.boost=Math.max(0,r.boost-dt); r.gold=Math.max(0,r.gold-dt); r.slow=Math.max(0,r.slow-dt); r.invincible=Math.max(0,r.invincible-dt);
-        const base=r===this.player?300:this.difficulty.speed;
+        const base=this.mode==='multiplayer'?300:(r===this.player?300:this.difficulty.speed);
         const target=r.slow>0?base*.47:r.gold>0?base*2:r.boost>0?base*1.43:base;
         r.speed+=(target-r.speed)*Math.min(1,dt*7); r.x+=r.speed*dt;
         r.y+=(r.lane-r.y)*Math.min(1,dt*13);
@@ -122,33 +133,61 @@
       }
       // Resolve pickups chronologically so shared acorns go to the first car.
       const interactions=[];
-      [this.player,this.opponent].forEach((r,ri)=>{
+      this.racers.forEach((r,ri)=>{
         for(const it of this.items) {
-          if(it.taken||it.seen.has(r.id)||(it.owner&&it.owner!==r.id))continue;
-          const reach=35;
-          const crossed=old[ri]-it.x<reach&&r.x-it.x>=-reach;
-          if(crossed&&Math.abs(it.lane-r.y)<.42) interactions.push({r,it,t:(it.x-reach-old[ri])/(r.x-old[ri])});
+          if(it.taken||it.seen.has(this.identity(r))||(it.owner&&it.owner!==this.identity(r)))continue;
+          const collectible=['acorn','gold','help'].includes(it.type);
+          const front=collectible?45:35, behind=collectible?75:35;
+          const crossed=old[ri]-it.x<behind&&r.x-it.x>=-front;
+          if(crossed&&Math.abs(it.lane-r.y)<(collectible ? .60 : .42)) {
+            const raw=(it.x-front-old[ri])/(r.x-old[ri]);
+            interactions.push({r,it,collectible,t:collectible?Math.max(0,Math.min(1,raw)):raw,raw});
+          }
         }
       });
-      interactions.sort((a,b)=>a.t-b.t).forEach(({r,it})=>{
-        if(it.taken)return;it.seen.add(r.id);
-        if(['acorn','gold','help'].includes(it.type)) {
+      interactions.sort((a,b)=>{const delta=a.t-b.t;if(Math.abs(delta)>1e-9)return delta;const entry=a.raw-b.raw;if(Math.abs(entry)>1e-9)return entry;if(a.it.id!==b.it.id)return a.it.id-b.it.id;if(a.r===b.r)return 0;if(this.mode==='multiplayer')return a.r.slot===itemPriority(this.seed,a.it.id)?-1:1;return 0;}).forEach(({r,it,collectible})=>{
+        if(it.taken)return;
+        if(collectible) {
           // Ramp rewards follow the flight arc and should not be narrowly missed
           // because a frame reaches the pickup a little before or after its apex.
           const verticalReach=it.rampBonus?150:78;
-          if(Math.abs(r.z-(it.z||0))<verticalReach)this.collect(r,it);
+          if(Math.abs(r.z-(it.z||0))<verticalReach){it.seen.add(this.identity(r));this.collect(r,it);}
         }
-        if(it.type==='rock'&&r.z<48)this.hit(r);
-        if(it.type==='ramp')this.jump(r,true);
+        else {it.seen.add(this.identity(r));if(it.type==='rock'&&r.z<48)this.hit(r);if(it.type==='ramp')this.jump(r,true);}
       });
       const p=this.player,o=this.opponent;
       if(Math.abs(p.x-o.x)<70&&Math.abs(p.y-o.y)<.43&&Math.abs(p.z-o.z)<50&&p.invincible===0&&o.invincible===0){this.hit(p);this.hit(o);}
-      if(p.x>=LENGTH||o.x>=LENGTH) {
+      if(this.mode==='multiplayer') this.resolveMultiplayerFinish(old, dt);
+      else if(p.x>=LENGTH||o.x>=LENGTH) {
         const pt=p.x>=LENGTH?(LENGTH-old[0])/(p.x-old[0]):Infinity;
         const ot=o.x>=LENGTH?(LENGTH-old[1])/(o.x-old[1]):Infinity;
         this.winner=pt<=ot?p.id:o.id;this.state='finished';
       }
     }
+    resolveMultiplayerFinish(old, dt) {
+      const crossed=[];
+      this.racers.forEach((r,i)=>{if(this.finishTimes[r.slot]===null&&r.x>=LENGTH){const fraction=Math.max(0,Math.min(1,(LENGTH-old[i])/(r.x-old[i]||1)));const at=this.time-dt+fraction*dt;this.finishTimes[r.slot]=at;crossed.push({slot:r.slot,at});}});
+      if(this.pendingFinish===null && crossed.length) this.pendingFinish=Math.min(...crossed.map(v=>v.at));
+      if(this.pendingFinish===null)return;
+      const hs=this.finishTimes.host, gs=this.finishTimes.guest;
+      if(hs!==null&&gs!==null || this.time>=this.pendingFinish+.001) {
+        this.winnerSlot=hs!==null&&gs!==null&&Math.abs(hs-gs)<=.001?null:((hs===null||gs!==null&&gs<hs)?'guest':'host');
+        this.winner=this.winnerSlot; this.state='finished';
+      }
+    }
+    snapshot() { return plain({version:1,seed:this.seed,round:this.round,mode:this.mode,opts:this.opts,time:this.time,countdown:this.countdown,state:this.state,winner:this.winner,winnerSlot:this.winnerSlot,finishTimes:this.finishTimes,pendingFinish:this.pendingFinish,helpCooldown:this.helpCooldown,nextItemId:this.nextItemId,player:this.player,opponent:this.opponent,items:this.items,events:this.events}); }
+    toJSON() { return this.snapshot(); }
+    static fromSnapshot(snapshot) {
+      if(!snapshot || typeof snapshot!=='object'||snapshot.version!==1||snapshot.mode!=='multiplayer'||!Number.isInteger(snapshot.seed)||!Number.isInteger(snapshot.round)||snapshot.round<0||snapshot.round>3||!Array.isArray(snapshot.items)||snapshot.items.length>256) throw new TypeError('invalid Race snapshot');
+      const validId=id=>CHARACTERS.some(c=>c.id===id), finite=n=>typeof n==='number'&&Number.isFinite(n), validRacer=(r,slot)=>r&&validId(r.id)&&r.slot===slot&&[r.x,r.y,r.z,r.vz,r.speed,r.acorns,r.boost,r.gold,r.slow,r.invincible].every(finite)&&Number.isInteger(r.lane)&&r.lane>=0&&r.lane<=2;
+      if(!validRacer(snapshot.player,'host')||!validRacer(snapshot.opponent,'guest')||!['countdown','racing','finished','paused'].includes(snapshot.state))throw new TypeError('invalid Race snapshot');
+      for(const it of snapshot.items)if(!it||!Number.isInteger(it.id)||!['acorn','gold','rock','ramp','help'].includes(it.type)||![it.x,it.lane].every(finite)||it.lane<0||it.lane>2||typeof it.taken!=='boolean'||!Array.isArray(it.seen)||it.seen.some(v=>v!=='host'&&v!=='guest'))throw new TypeError('invalid item');
+      const race=new Race(snapshot.player.id,snapshot.opponent.id,snapshot.seed,snapshot.round,{...(snapshot.opts||{}),mode:snapshot.mode});
+      for(const key of ['time','countdown','state','winner','winnerSlot','finishTimes','pendingFinish','helpCooldown','nextItemId']) if(Object.prototype.hasOwnProperty.call(snapshot,key)) race[key]=plain(snapshot[key]);
+      race.player=plain(snapshot.player); race.opponent=plain(snapshot.opponent); race.racers=[race.player,race.opponent];
+      race.items=(snapshot.items||[]).map(it=>({...plain(it),seen:new Set(it.seen||[])})); race.events=(snapshot.events||[]).map(plain);
+      return race;
+    }
   }
-  return {Race,CHARACTERS,LENGTH,DIFFICULTY,opponents,seeded};
+  return {Race,CHARACTERS,LENGTH,DIFFICULTY,opponents,seeded,itemPriority};
 });

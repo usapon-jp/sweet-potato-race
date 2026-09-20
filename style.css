@@ -8,3 +8,31 @@
  body.manual-landscape #rotate{display:none}
  body.manual-landscape #game{visibility:visible;position:absolute;left:50%;top:50%;width:min(100dvh,177.77778vw);height:min(56.25dvh,100vw);transform:translate(-50%,-50%) rotate(90deg)}
 }
+.start-actions{display:flex;align-items:center;gap:1.5cqw}.nearby-button{border:0;background:#fff9e9;color:#75425e;border-radius:99px;padding:1.7cqh 2.5cqw;font-weight:800;font-size:2.1cqh;box-shadow:0 3px 0 #75425e33;min-height:40px}.nearby-button:active{transform:translateY(2px)}
+.multiplayer-layer{z-index:6;pointer-events:none}.multiplayer-card{pointer-events:auto;position:absolute;left:50%;bottom:6cqh;transform:translateX(-50%);width:min(54cqw,590px);padding:2.1cqh 3.4cqw;text-align:center;background:#fff9e9f5;border-radius:4cqh;box-shadow:0 12px 50px #46543130}.multiplayer-card h2{font-size:4cqh;margin:.4cqh 0}.multiplayer-card p{font-size:2.2cqh;font-weight:700}.multiplayer-actions{display:flex;justify-content:center;align-items:center;gap:1.5cqw;margin-top:1.6cqh}.multiplayer-actions .primary{padding:1.6cqh 3.2cqw;font-size:2.4cqh}.multiplayer-actions .text-button{margin:0;font-size:1.9cqh}.multiplayer-qr{display:flex;justify-content:center;margin:1cqh auto}.multiplayer-qr svg{width:min(20cqh,150px);height:min(20cqh,150px);padding:7px;background:#fff;border-radius:1cqh}.multiplayer-link{max-width:44cqw;margin:.5cqh auto 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:1.7cqh;color:#665648;user-select:text;-webkit-user-select:text}
+/* Lobby: keep selection and readiness together; reserve QR space for the host. */
+body.multiplayer-lobby .intro{width:62cqw;padding-top:6cqh}
+body.multiplayer-lobby .intro h1{font-size:5cqh}
+body.multiplayer-lobby .intro p{font-size:max(12px,2.4cqh)}
+body.multiplayer-lobby #characters{left:3cqw;right:38cqw;width:auto;padding:0;top:35cqh;gap:.8cqw}
+body.multiplayer-lobby .character{flex:1;min-width:0;height:34cqh;border-radius:2.5cqh}
+body.multiplayer-lobby .character canvas{height:23cqh}
+body.multiplayer-lobby .character strong{font-size:max(11px,2.3cqh);margin-top:.5cqh;white-space:nowrap}
+.multiplayer-lobby .multiplayer-card{left:auto;right:3cqw;bottom:auto;top:8cqh;transform:none;width:32cqw;padding:2.5cqh 1.5cqw;box-shadow:0 5px 20px #46543118}
+.multiplayer-lobby .multiplayer-card h2{display:none}
+.multiplayer-lobby .multiplayer-card p{font-size:max(11px,2cqh);line-height:1.5}
+.multiplayer-lobby .multiplayer-qr{margin:1.2cqh auto}
+.multiplayer-lobby .multiplayer-qr svg{width:clamp(120px,36cqh,160px);height:clamp(120px,36cqh,160px);padding:6px}
+.multiplayer-lobby .multiplayer-link{max-width:28cqw;font-size:max(9px,1.5cqh)}
+.multiplayer-lobby .multiplayer-actions{margin-top:1.5cqh;gap:.4cqh 1.2cqw;flex-wrap:wrap}
+.multiplayer-lobby .multiplayer-actions .primary{order:-1;flex-basis:100%;padding:1.2cqh 1.8cqw;font-size:max(13px,2.5cqh);white-space:nowrap;min-height:44px}
+.multiplayer-lobby .multiplayer-actions .text-button{font-size:max(11px,2cqh);white-space:nowrap;min-height:32px}
+body.multiplayer-lobby[data-multiplayer-role="guest"] .intro{width:100%;padding-top:5cqh}
+body.multiplayer-lobby[data-multiplayer-role="guest"] .intro h1{font-size:6cqh}
+body.multiplayer-lobby[data-multiplayer-role="guest"] #characters{left:7cqw;right:7cqw;top:29cqh;gap:1.3cqw}
+body.multiplayer-lobby[data-multiplayer-role="guest"] .character{height:35cqh}
+body.multiplayer-lobby[data-multiplayer-role="guest"] .character canvas{height:25cqh}
+body.multiplayer-lobby[data-multiplayer-role="guest"] .multiplayer-card{left:7cqw;right:7cqw;top:69cqh;width:auto;padding:0;background:none;box-shadow:none}
+body.multiplayer-lobby[data-multiplayer-role="guest"] #multiplayer-kicker{display:none}
+body.multiplayer-lobby[data-multiplayer-role="guest"] .multiplayer-actions{margin-top:1cqh;gap:2cqw;flex-wrap:nowrap}
+body.multiplayer-lobby[data-multiplayer-role="guest"] .multiplayer-actions .primary{flex-basis:auto;padding:1.7cqh 4cqw}

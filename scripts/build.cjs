@@ -5,6 +5,8 @@ const output = path.join(root, 'dist');
 // Only these game files may become part of the public website.
 const files = [
   'index.html', 'style.css', 'engine.js', 'game.js', 'assets/bounds.js',
+  'runtime-config.js', 'realtime-transport.js', 'multiplayer-session.js',
+  'vendor/supabase.js', 'vendor/qrcode.js', 'vendor/supabase-LICENSE', 'vendor/README.txt',
   ...['brown', 'gray', 'mugi', 'mocha', 'yuzu', 'meadow'].map(id => `assets/${id}.png`),
 ];
 fs.rmSync(output, { recursive: true, force: true });
