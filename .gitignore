@@ -1,0 +1,6 @@
+.DS_Store
+node_modules/
+dist/
+assets/sources.json
+tests/latest-results.txt
+release-verification.json

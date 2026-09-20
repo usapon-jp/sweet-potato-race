@@ -1,0 +1,32 @@
+[
+  {
+    "source": "さつまいもカー.png",
+    "file": "brown.png",
+    "sha256": "a1144940b645e62bfa44c3f1ecda4e35aaf8e0152089606285eafcf6bf6af774"
+  },
+  {
+    "source": "さつまいもカー 1.png",
+    "file": "gray.png",
+    "sha256": "20327ffb5a9f454e6cda3bb0e51b7043e432cfe3fe732ce7313fe7f6ae14ef6c"
+  },
+  {
+    "source": "さつまいもカーむぎくん背景なし.png",
+    "file": "mugi.png",
+    "sha256": "93c208473ad065c58ba7862dec09359ed554d5952c99f37ee8c2c5155aa5ca95"
+  },
+  {
+    "source": "もかちゃま背景なし.png",
+    "file": "mocha.png",
+    "sha256": "bf0fc31fc1c844b08cae357d2581dfa875517abcec1c3392dfd3a64a8fdf2cc1"
+  },
+  {
+    "source": "ゆずくん背景なし.png",
+    "file": "yuzu.png",
+    "sha256": "5d7a73ccaeb6006ad658f6d32bdd1a33e41964a567eede2ef69251d0c8488f9c"
+  },
+  {
+    "source": "HP 2.png",
+    "file": "meadow.png",
+    "sha256": "eabe228646648c46c7f0c9ea16a8e6ad8376a21f108e4300ae116e802a90dac4"
+  }
+]

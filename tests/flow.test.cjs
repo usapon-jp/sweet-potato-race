@@ -1,0 +1,26 @@
+// Run real UI handlers in a tiny DOM harness to verify tournament state separately
+// from browser screenshots and physical touch acceptance.
+const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');const path=require('node:path');
+const root=path.join(__dirname,'..');
+async function app(){
+ const elements=new Map(),context2d=new Proxy({createLinearGradient:()=>({addColorStop(){}})},{get:(t,k)=>t[k]||(()=>{})});
+ function el(){return {hidden:false,textContent:'',style:{},dataset:{},children:[],listeners:{},attrs:{},classList:{add(){},remove(){}},append(...v){this.children.push(...v)},replaceChildren(...v){this.children=v},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,f){this.listeners[k]=f},getContext(){return context2d},focus(){},setPointerCapture(){}};}
+ const document={hidden:false,body:el(),getElementById(id){if(!elements.has(id))elements.set(id,el());return elements.get(id)},createElement:el,querySelectorAll(){return elements.get('characters').children},addEventListener(){}};
+ class Image{set src(v){this.onload();}}
+ const sandbox={document,console,Image,performance:{now:()=>0},requestAnimationFrame(){},addEventListener(){},matchMedia:()=>({matches:false,addEventListener(){}}),Math:Object.create(Math)};
+ sandbox.Math.random=require('../engine.js').seeded(81);sandbox.window=sandbox;
+ const c=vm.createContext(sandbox);for(const f of ['engine.js','assets/bounds.js','game.js'])vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),c);
+ await new Promise(setImmediate);return {run:s=>vm.runInContext(s,c),elements,snapshot:()=>c.raceSnapshot()};
+}
+test('all five cards load and selection changes the player',async()=>{const a=await app();const cards=a.elements.get('characters').children;assert.equal(cards.length,5);cards[2].listeners.click();assert.equal(a.snapshot().selected,'mugi');a.elements.get('start').listeners.click();assert.equal(a.snapshot().player.id,'mugi');assert.ok(!a.snapshot().order.includes('mugi'));});
+test('four wins advance through distinct rivals to championship and restart',async()=>{const a=await app();a.run('startTournament()');const pool=a.snapshot().order;for(let i=0;i<4;i++){
+ assert.equal(a.snapshot().round,i);assert.equal(a.snapshot().opponent.id,pool[i]);
+ a.run("race.winner=selected;race.state='finished';finish()");
+ assert.equal(a.elements.get('dialog').hidden,false);
+ if(i<3){assert.match(a.elements.get('result-detail').textContent,/次の相手/);a.elements.get('continue').onclick();}
+ }
+ assert.equal(a.elements.get('dialog-title').textContent,'優勝！');assert.equal(a.elements.get('wins').children.filter(s=>s.className==='won').length,4);
+ a.elements.get('continue').onclick();assert.equal(a.snapshot().round,0);assert.equal(a.snapshot().state,'countdown');
+});
+test('losing retry preserves opponent, order, and prior wins; choose again resets UI',async()=>{const a=await app();a.run('startTournament();round=2;startRace()');const before=a.snapshot();a.run("race.winner=race.opponent.id;race.state='finished';finish()");assert.equal(a.elements.get('continue').textContent,'同じ相手に再挑戦');a.elements.get('continue').onclick();assert.equal(a.snapshot().round,2);assert.deepEqual(a.snapshot().order,before.order);assert.equal(a.snapshot().opponent.id,before.opponent.id);a.elements.get('back').onclick();assert.equal(a.snapshot().view,'selection');assert.equal(a.snapshot().player,null);});
+test('pause/resume restores countdown or racing, and control handlers affect the car',async()=>{const a=await app();a.run('startTournament();pause()');assert.equal(a.snapshot().state,'paused');a.run('resume()');assert.equal(a.snapshot().state,'countdown');a.run("race.state='racing'");const e={preventDefault(){},pointerId:1};a.elements.get('up').listeners.pointerdown(e);assert.equal(a.snapshot().player.lane,0);a.elements.get('down').listeners.pointerdown(e);assert.equal(a.snapshot().player.lane,1);a.elements.get('jump').listeners.pointerdown(e);assert.ok(a.snapshot().player.vz>0);a.run('pause();resume()');assert.equal(a.snapshot().state,'racing');});
