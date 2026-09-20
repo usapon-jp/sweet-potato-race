@@ -26,7 +26,7 @@
     for (let i=pool.length-1;i>0;i--) {const j=Math.floor(rng()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]];}
     return pool;
   }
-  function racer(id, lane, slot) {return {id,slot,x:0,lane,y:lane,z:0,vz:0,speed:300,acorns:0,boost:0,gold:0,slow:0,invincible:0,aiWait:0,jumps:0,hits:0,collected:0};}
+  function racer(id, lane, slot) {return {id,slot,x:0,lane,y:lane,z:0,vz:0,speed:300,acorns:0,boost:0,gold:0,slow:0,invincible:0,knockback:0,aiWait:0,jumps:0,hits:0,collected:0};}
   function itemPriority(seed, itemId) { return ((Math.imul((seed|0) ^ Math.imul((itemId|0)+1, 0x9e3779b1), 0x85ebca6b) >>> 0) & 1) === 0 ? 'host' : 'guest'; }
   function plain(value) {
     if (value instanceof Set) return Array.from(value);
@@ -36,7 +36,7 @@
   }
   class Race {
     constructor(playerId, opponentId, seed=19, round=0, opts={}) {
-      this.seed=seed|0; this.opts=opts||{}; this.mode=this.opts.mode==='multiplayer'?'multiplayer':'solo'; this.rng=seeded(seed); this.round=Math.max(0,Math.min(3,round)); this.difficulty=DIFFICULTY[this.round]; this.helpCooldown=0; this.nextItemId=1000;
+      this.seed=seed|0; this.opts=opts||{}; this.mode=this.opts.mode==='multiplayer'?'multiplayer':'solo'; this.rng=seeded(seed); this.round=Math.max(0,Math.min(3,round)); this.difficulty=DIFFICULTY[this.round]; this.helpCooldown=0; this.helpCounters={host:0,guest:0}; this.nextItemId=1000;
       const swapped=this.mode==='multiplayer' && this.rng() >= .5;
       this.player=racer(playerId,this.mode==='multiplayer'?(swapped?2:0):1,this.mode==='multiplayer'?'host':null);
       this.opponent=racer(opponentId,this.mode==='multiplayer'?(swapped?0:2):0,this.mode==='multiplayer'?'guest':null);
@@ -67,7 +67,7 @@
     }
     identity(r) { return this.mode==='multiplayer'?r.slot:r.id; }
     emit(type,r,extra={}) {this.events.push({type,id:this.identity(r),slot:r.slot||undefined,x:r.x,y:r.y,...extra});}
-    move(r,dir) {if(this.state==='racing')r.lane=Math.max(0,Math.min(2,r.lane+dir));}
+    move(r,dir) {if(this.state==='racing'&&r.knockback<=0)r.lane=Math.max(0,Math.min(2,r.lane+dir));}
     jump(r, ramp=false) {
       if(this.state!=='racing') return false;
       // A ramp must relaunch a car that is still airborne from a previous ramp.
@@ -76,30 +76,33 @@
       if(!ramp&&(r.z>1||r.vz>0)) return false;
       r.vz=ramp?680:550; r.jumps++; this.emit(ramp?'ramp':'jump',r); return true;
     }
-    hit(r) {
+    hit(r, collision=false) {
       if(r.invincible>0)return;
-      const lost=Math.min(r.acorns,3); r.acorns-=lost; r.boost=0; r.gold=0; r.slow=1.45; r.invincible=1.9; r.hits++;
+      const lost=Math.min(r.acorns,3); r.acorns-=lost; r.boost=0; r.gold=0; r.slow=collision ? .45 : 1.45; r.invincible=1.9; r.hits++;
       this.emit('hit',r,{lost});
     }
     collect(r,it) {
       if(it.owner&&it.owner!==this.identity(r))return;
       it.taken=true;r.acorns++;r.collected++;
-      if(it.type==='gold'){r.gold=1.5;r.boost=0;}
+      if(it.type==='gold'||it.golden){r.gold=1.5;r.boost=0;}
       else if(r.gold<=0)r.boost=2.8;
-      this.emit(it.type,r);
+      this.emit(it.golden?'gold':it.type,r);
     }
     help(dt) {
       this.helpCooldown=Math.max(0,this.helpCooldown-dt);
       this.items=this.items.filter(it=>it.type!=='help'||(!it.taken&&this.time<it.expires));
       if(this.helpCooldown>0||this.items.some(it=>it.type==='help'))return;
       const p=this.player,o=this.opponent;
-      if(Math.abs(p.x-o.x)<600)return;
+      const gap=Math.abs(p.x-o.x); if(gap<600)return;
       const r=p.x<o.x?p:o, x=r.x+240;
       if(x>LENGTH-160)return;
       // Choose a clear lane, preferring the trailing car's current lane.
       const lane=[r.lane,...[0,1,2].filter(l=>l!==r.lane)].find(l=>!this.items.some(it=>it.type==='rock'&&it.lane===l&&Math.abs(it.x-x)<150));
       if(lane===undefined)return;
-      this.items.push({id:this.nextItemId++,type:'help',x,lane,owner:this.identity(r),spawned:this.time,expires:this.time+4,seen:new Set(),taken:false});
+      const owner=this.identity(r), eligibleGold=gap>=1000;
+      if(eligibleGold)this.helpCounters[owner]=(this.helpCounters[owner]||0)+1;
+      const golden=eligibleGold&&this.helpCounters[owner]%2===0;
+      this.items.push({id:this.nextItemId++,type:'help',golden,x,lane,owner,spawned:this.time,expires:this.time+4,seen:new Set(),taken:false});
       this.helpCooldown=6;this.emit('helpSpawn',r);
     }
     think(dt) {
@@ -124,11 +127,11 @@
       dt=Math.min(dt,.05); this.time+=dt; this.help(dt); if(this.mode!=='multiplayer')this.think(dt);
       const old=[this.player.x,this.opponent.x];
       for(const r of this.racers) {
-        r.boost=Math.max(0,r.boost-dt); r.gold=Math.max(0,r.gold-dt); r.slow=Math.max(0,r.slow-dt); r.invincible=Math.max(0,r.invincible-dt);
+        r.boost=Math.max(0,r.boost-dt); r.gold=Math.max(0,r.gold-dt); r.slow=Math.max(0,r.slow-dt); r.invincible=Math.max(0,r.invincible-dt); r.knockback=Math.max(0,r.knockback-dt);
         const base=this.mode==='multiplayer'?300:(r===this.player?300:this.difficulty.speed);
         const target=r.slow>0?base*.47:r.gold>0?base*2:r.boost>0?base*1.43:base;
         r.speed+=(target-r.speed)*Math.min(1,dt*7); r.x+=r.speed*dt;
-        r.y+=(r.lane-r.y)*Math.min(1,dt*13);
+        r.y+=(r.lane-r.y)*Math.min(1,dt*(r.knockback>0?20:13));
         if(r.z>0||r.vz>0){r.z+=r.vz*dt;r.vz-=1200*dt;if(r.z<=0){r.z=0;r.vz=0;}}
       }
       // Resolve pickups chronologically so shared acorns go to the first car.
@@ -156,13 +159,19 @@
         else {it.seen.add(this.identity(r));if(it.type==='rock'&&r.z<48)this.hit(r);if(it.type==='ramp')this.jump(r,true);}
       });
       const p=this.player,o=this.opponent;
-      if(Math.abs(p.x-o.x)<70&&Math.abs(p.y-o.y)<.43&&Math.abs(p.z-o.z)<50&&p.invincible===0&&o.invincible===0){this.hit(p);this.hit(o);}
+      if(Math.abs(p.x-o.x)<70&&Math.abs(p.y-o.y)<.43&&Math.abs(p.z-o.z)<50&&p.invincible===0&&o.invincible===0)this.collide(p,o);
       if(this.mode==='multiplayer') this.resolveMultiplayerFinish(old, dt);
       else if(p.x>=LENGTH||o.x>=LENGTH) {
         const pt=p.x>=LENGTH?(LENGTH-old[0])/(p.x-old[0]):Infinity;
         const ot=o.x>=LENGTH?(LENGTH-old[1])/(o.x-old[1]):Infinity;
         this.winner=pt<=ot?p.id:o.id;this.state='finished';
       }
+    }
+    collide(p,o) {
+      this.hit(p,true);this.hit(o,true);
+      const nearest=Math.max(0,Math.min(2,Math.round((p.y+o.y)/2))), pair=nearest===0?[0,1]:nearest===1?[0,2]:[1,2];
+      let first=p.y<o.y?p:p.y>o.y?o:(((this.seed+p.hits+o.hits)&1)===0?p:o), second=first===p?o:p;
+      first.lane=pair[0];second.lane=pair[1];for(const r of [p,o]){r.knockback=.35;if(r.vz<260)r.vz=260;}
     }
     resolveMultiplayerFinish(old, dt) {
       const crossed=[];
@@ -175,15 +184,15 @@
         this.winner=this.winnerSlot; this.state='finished';
       }
     }
-    snapshot() { return plain({version:1,seed:this.seed,round:this.round,mode:this.mode,opts:this.opts,time:this.time,countdown:this.countdown,state:this.state,winner:this.winner,winnerSlot:this.winnerSlot,finishTimes:this.finishTimes,pendingFinish:this.pendingFinish,helpCooldown:this.helpCooldown,nextItemId:this.nextItemId,player:this.player,opponent:this.opponent,items:this.items,events:this.events}); }
+    snapshot() { return plain({version:1,seed:this.seed,round:this.round,mode:this.mode,opts:this.opts,time:this.time,countdown:this.countdown,state:this.state,winner:this.winner,winnerSlot:this.winnerSlot,finishTimes:this.finishTimes,pendingFinish:this.pendingFinish,helpCooldown:this.helpCooldown,helpCounters:this.helpCounters,nextItemId:this.nextItemId,player:this.player,opponent:this.opponent,items:this.items,events:this.events}); }
     toJSON() { return this.snapshot(); }
     static fromSnapshot(snapshot) {
       if(!snapshot || typeof snapshot!=='object'||snapshot.version!==1||snapshot.mode!=='multiplayer'||!Number.isInteger(snapshot.seed)||!Number.isInteger(snapshot.round)||snapshot.round<0||snapshot.round>3||!Array.isArray(snapshot.items)||snapshot.items.length>256) throw new TypeError('invalid Race snapshot');
-      const validId=id=>CHARACTERS.some(c=>c.id===id), finite=n=>typeof n==='number'&&Number.isFinite(n), validRacer=(r,slot)=>r&&validId(r.id)&&r.slot===slot&&[r.x,r.y,r.z,r.vz,r.speed,r.acorns,r.boost,r.gold,r.slow,r.invincible].every(finite)&&Number.isInteger(r.lane)&&r.lane>=0&&r.lane<=2;
+      const validId=id=>CHARACTERS.some(c=>c.id===id), finite=n=>typeof n==='number'&&Number.isFinite(n), validRacer=(r,slot)=>r&&validId(r.id)&&r.slot===slot&&[r.x,r.y,r.z,r.vz,r.speed,r.acorns,r.boost,r.gold,r.slow,r.invincible,r.knockback].every(finite)&&Number.isInteger(r.lane)&&r.lane>=0&&r.lane<=2;
       if(!validRacer(snapshot.player,'host')||!validRacer(snapshot.opponent,'guest')||!['countdown','racing','finished','paused'].includes(snapshot.state))throw new TypeError('invalid Race snapshot');
-      for(const it of snapshot.items)if(!it||!Number.isInteger(it.id)||!['acorn','gold','rock','ramp','help'].includes(it.type)||![it.x,it.lane].every(finite)||it.lane<0||it.lane>2||typeof it.taken!=='boolean'||!Array.isArray(it.seen)||it.seen.some(v=>v!=='host'&&v!=='guest'))throw new TypeError('invalid item');
+      for(const it of snapshot.items)if(!it||!Number.isInteger(it.id)||!['acorn','gold','rock','ramp','help'].includes(it.type)||![it.x,it.lane].every(finite)||it.lane<0||it.lane>2||typeof it.taken!=='boolean'||it.golden!==undefined&&typeof it.golden!=='boolean'||!Array.isArray(it.seen)||it.seen.some(v=>v!=='host'&&v!=='guest'))throw new TypeError('invalid item');
       const race=new Race(snapshot.player.id,snapshot.opponent.id,snapshot.seed,snapshot.round,{...(snapshot.opts||{}),mode:snapshot.mode});
-      for(const key of ['time','countdown','state','winner','winnerSlot','finishTimes','pendingFinish','helpCooldown','nextItemId']) if(Object.prototype.hasOwnProperty.call(snapshot,key)) race[key]=plain(snapshot[key]);
+      for(const key of ['time','countdown','state','winner','winnerSlot','finishTimes','pendingFinish','helpCooldown','helpCounters','nextItemId']) if(Object.prototype.hasOwnProperty.call(snapshot,key)) race[key]=plain(snapshot[key]);
       race.player=plain(snapshot.player); race.opponent=plain(snapshot.opponent); race.racers=[race.player,race.opponent];
       race.items=(snapshot.items||[]).map(it=>({...plain(it),seen:new Set(it.seen||[])})); race.events=(snapshot.events||[]).map(plain);
       return race;

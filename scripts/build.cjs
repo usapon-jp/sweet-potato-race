@@ -6,6 +6,7 @@ const output = path.join(root, 'dist');
 const files = [
   'index.html', 'style.css', 'engine.js', 'game.js', 'assets/bounds.js',
   'runtime-config.js', 'realtime-transport.js', 'multiplayer-session.js',
+  'manifest.webmanifest', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/apple-touch-icon.png',
   'vendor/supabase.js', 'vendor/qrcode.js', 'vendor/supabase-LICENSE', 'vendor/README.txt',
   ...['brown', 'gray', 'mugi', 'mocha', 'yuzu', 'meadow'].map(id => `assets/${id}.png`),
 ];

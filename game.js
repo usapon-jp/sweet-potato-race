@@ -6,7 +6,7 @@ const images={}, W=1280,H=720,lanes=[326,441,556];
 let selected='brown',order=[],round=0,race=null,view='selection',last=0,accumulator=0,particles=[],noticeUntil=0,ready=false;
 let backgroundClock=0,finishShown=false,pausePrevious='racing';
 let manualLandscape=false,guidePrevious='countdown',seenStartGuide=false,seenGoldGuide=false;
-let multiplayer=null,multiplayerToken='',multiplayerRole='',multiplayerResultShown=false,multiplayerClosing=false,multiplayerDisplay=null,multiplayerTargets=null,multiplayerDisplayRaceId='',multiplayerAttempt=0,invalidJoinLink=false;
+let multiplayer=null,multiplayerToken='',multiplayerRole='',multiplayerResultShown=false,multiplayerClosing=false,multiplayerDisplay=null,multiplayerTargets=null,multiplayerDisplayRaceId='',guestKnockbackInputCutoff=0,guestKnockbackWasActive=false,multiplayerAttempt=0,invalidJoinLink=false;
 function orientationBlocked(){return matchMedia('(orientation: portrait)').matches&&!manualLandscape;}
 $('play-rotated').onclick=()=>{manualLandscape=true;document.body.classList.add('manual-landscape');if(view==='paused')resume();};
 const char=id=>CHARACTERS.find(c=>c.id===id);
@@ -23,8 +23,8 @@ function showGuide(kicker,title,detail,jumpTip=false){
 }
 function closeGuide(){if(!race)return;if(!inMultiplayer())race.state=guidePrevious;view='race';document.body.classList.remove('show-jump-tip');toggle('guide',false);last=performance.now();accumulator=0;}
 function portraitFlag(c){
- c.save();c.translate(54,198);c.rotate(-.18);c.strokeStyle='#76543c';c.lineWidth=3;c.lineCap='round';c.beginPath();c.moveTo(0,0);c.lineTo(0,-55);c.stroke();
- c.fillStyle='#ef9ba4';c.beginPath();c.moveTo(2,-53);c.lineTo(-33,-42);c.lineTo(2,-31);c.closePath();c.fill();c.strokeStyle='#bd6e7c';c.lineWidth=1.5;c.stroke();c.restore();
+ c.save();c.translate(54,154);c.rotate(-.18);c.strokeStyle='#76543c';c.lineWidth=3;c.lineCap='round';c.beginPath();c.moveTo(0,0);c.lineTo(0,-43);c.stroke();
+ c.fillStyle='#ef9ba4';c.beginPath();c.moveTo(2,-41);c.lineTo(-28,-31);c.lineTo(2,-21);c.closePath();c.fill();c.strokeStyle='#bd6e7c';c.lineWidth=1.5;c.stroke();c.restore();
 }
 function makePortrait(id,flagged=false){
  const out=document.createElement('canvas');out.width=250;out.height=230;
@@ -119,7 +119,7 @@ function multiplayerState(snapshot){
  if(multiplayer.localSlot==='guest'&&race){
   multiplayerTargets={host:{...race.player},guest:{...race.opponent}};
   const raceId=snapshot?.raceId||multiplayer.raceId||'';
-  if(!multiplayerDisplay||raceId!==multiplayerDisplayRaceId){multiplayerDisplay={host:{...race.player},guest:{...race.opponent}};multiplayerDisplayRaceId=raceId;}
+  if(!multiplayerDisplay||raceId!==multiplayerDisplayRaceId){multiplayerDisplay={host:{...race.player},guest:{...race.opponent}};multiplayerDisplayRaceId=raceId;guestKnockbackInputCutoff=0;guestKnockbackWasActive=false;}
   refreshGuestDisplayLane();
  }else {multiplayerDisplay=null;multiplayerDisplayRaceId='';}
  const phase=snapshot?.phase||multiplayer.phase;
@@ -147,19 +147,26 @@ function requestMultiplayerRematch(){
  $('continue').disabled=true;$('result-detail').textContent='相手の準備を待っています。';
 }
 function showMultiplayerAbort(detail='対戦を中断しました。'){
- if(multiplayerClosing)return;multiplayerClosing=true;const oldRole=multiplayerRole,session=multiplayer;multiplayer=null;session?.close();race=null;multiplayerDisplay=null;multiplayerTargets=null;multiplayerDisplayRaceId='';view='result';document.body.classList.remove('multiplayer-lobby');
+ if(multiplayerClosing)return;multiplayerClosing=true;const oldRole=multiplayerRole,session=multiplayer;multiplayer=null;session?.close();race=null;multiplayerDisplay=null;multiplayerTargets=null;multiplayerDisplayRaceId='';guestKnockbackInputCutoff=0;guestKnockbackWasActive=false;view='result';document.body.classList.remove('multiplayer-lobby');
  showDialog('対戦を中断しました。','またあとで遊ぼう',detail,'もう一度あそぶ',()=>{if(oldRole==='host')createMultiplayerRoom();else goSelection();},false);multiplayerClosing=false;
 }
 function closeMultiplayer(reason='left'){
- multiplayerAttempt++;if(!multiplayer){multiplayerClosing=false;return;}multiplayerClosing=true;const session=multiplayer;multiplayer=null;session.abort(reason);session.close();multiplayerClosing=false;race=null;multiplayerToken='';multiplayerDisplay=null;multiplayerTargets=null;multiplayerDisplayRaceId='';
+ multiplayerAttempt++;if(!multiplayer){multiplayerClosing=false;return;}multiplayerClosing=true;const session=multiplayer;multiplayer=null;session.abort(reason);session.close();multiplayerClosing=false;race=null;multiplayerToken='';multiplayerDisplay=null;multiplayerTargets=null;multiplayerDisplayRaceId='';guestKnockbackInputCutoff=0;guestKnockbackWasActive=false;
 }
 function guestDisplayLane(){
- let lane=multiplayerTargets?.guest?.lane??multiplayerDisplay?.guest?.lane??1;
+ const target=multiplayerTargets?.guest;let lane=target?.lane??multiplayerDisplay?.guest?.lane??1;
  const pending=multiplayer?.pendingInputs;
- if(pending?.values)for(const input of pending.values()){
+ if(target?.knockback>0){
+  guestKnockbackWasActive=true;if(pending)for(const seq of pending.keys())guestKnockbackInputCutoff=Math.max(guestKnockbackInputCutoff,Number(seq)||0);
+  return lane;
+ }
+ let hasPreHitPending=false;
+ if(pending?.entries)for(const [seq,input] of pending.entries()){
+  if(guestKnockbackWasActive&&Number(seq)<=guestKnockbackInputCutoff){hasPreHitPending=true;continue;}
   if(input?.action==='up')lane=Math.max(0,lane-1);
   else if(input?.action==='down')lane=Math.min(2,lane+1);
  }
+ if(guestKnockbackWasActive&&!hasPreHitPending){guestKnockbackWasActive=false;guestKnockbackInputCutoff=0;}
  return lane;
 }
 function refreshGuestDisplayLane(){
@@ -254,19 +261,21 @@ function meadow(camera){
 function acorn(x,y,s=1,gold=false){ctx.save();ctx.translate(x,y);ctx.rotate(.3);ctx.scale(s,s);ctx.strokeStyle='#715036';ctx.lineWidth=3;ellipse(0,0,13,18,gold?'#ffe15c':'#cc934e');ctx.stroke();rounded(-17,-17,34,13,7,gold?'#dba62a':'#9f7045');ctx.stroke();ctx.beginPath();ctx.moveTo(0,-18);ctx.quadraticCurveTo(-2,-27,6,-27);ctx.stroke();ctx.restore();}
 function sparkle(x,y,size){ctx.save();ctx.translate(x,y);ctx.fillStyle='#fff9bd';ctx.beginPath();ctx.moveTo(0,-size);ctx.lineTo(size*.34,-size*.34);ctx.lineTo(size,0);ctx.lineTo(size*.34,size*.34);ctx.lineTo(0,size);ctx.lineTo(-size*.34,size*.34);ctx.lineTo(-size,0);ctx.lineTo(-size*.34,-size*.34);ctx.closePath();ctx.fill();ctx.restore();}
 function playerFlag(x,y){
- ctx.save();ctx.translate(x-53,y-25);ctx.rotate(-.18);ctx.strokeStyle='#76543c';ctx.lineWidth=4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-68);ctx.stroke();
- ctx.fillStyle='#ef9ba4';ctx.beginPath();ctx.moveTo(2,-66);ctx.lineTo(-40,-53);ctx.lineTo(2,-39);ctx.closePath();ctx.fill();
+ ctx.save();ctx.translate(x-53,y-62);ctx.rotate(-.18);ctx.strokeStyle='#76543c';ctx.lineWidth=4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-55);ctx.stroke();
+ ctx.fillStyle='#ef9ba4';ctx.beginPath();ctx.moveTo(2,-53);ctx.lineTo(-34,-41);ctx.lineTo(2,-29);ctx.closePath();ctx.fill();
  ctx.strokeStyle='#bd6e7c';ctx.lineWidth=2;ctx.stroke();ctx.restore();
 }
 function obstacle(it,camera){const x=it.x-camera,y=lanes[it.lane];if(x<-100||x>W+100||it.taken)return;
  if(it.type==='rock'){ellipse(x,y+8,32,8,'#77754935');ctx.fillStyle='#9a9e95';ctx.strokeStyle='#74766d';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x-31,y+7);ctx.lineTo(x-26,y-15);ctx.quadraticCurveTo(x-6,y-48,x+14,y-31);ctx.quadraticCurveTo(x+32,y-20,x+33,y+8);ctx.closePath();ctx.fill();ctx.stroke();ellipse(x-8,y-12,4,5,'#7e8279');ellipse(x+16,y-2,3,5,'#7e8279');}
  else if(it.type==='ramp'){ctx.fillStyle='#be864d';ctx.strokeStyle='#85623b';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x-44,y+7);ctx.lineTo(x+36,y-30);ctx.lineTo(x+36,y+7);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle='#fff1ad';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x-17,y-2);ctx.lineTo(x+11,y-15);ctx.stroke();}
  else{
-  const fall=it.type==='help'?Math.max(0,1-(race.time-it.spawned)/.45)*90:0;
+ const fall=it.type==='help'?Math.max(0,1-(race.time-it.spawned)/.45)*90:0;
   const cy=y-24-(it.z||0)+Math.sin(backgroundClock*5+it.id)*4-fall;
+  const golden=it.type==='gold'||(it.type==='help'&&it.golden);
   if(it.z){ctx.save();ctx.setLineDash([5,6]);ctx.strokeStyle='#fff7c9d9';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,y-3);ctx.lineTo(x,cy+17);ctx.stroke();ctx.restore();}
-  if(it.type==='gold'){ellipse(x,cy,34,39,'#fff6a38a');sparkle(x-28,cy-23,7+Math.sin(backgroundClock*7)*2);sparkle(x+31,cy+17,5+Math.sin(backgroundClock*7+1)*2);}
-  ellipse(x,y+7,it.type==='gold'?19:14,it.type==='gold'?5:4,'#9b84372b');acorn(x,cy,it.type==='gold'?1.28:.9,it.type==='gold');
+  if(golden){ellipse(x,cy,34,39,'#fff6a38a');sparkle(x-28,cy-23,7+Math.sin(backgroundClock*7)*2);sparkle(x+31,cy+17,5+Math.sin(backgroundClock*7+1)*2);}
+  if(it.owner){ctx.save();ctx.strokeStyle='#6ca85f';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(x,cy,golden?28:22,golden?31:25,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
+  ellipse(x,y+7,golden?19:14,golden?5:4,'#9b84372b');acorn(x,cy,golden?1.28:.9,golden);
  }
 }
 function car(r,camera){const x=r.x-camera,y=lanes[0]+r.y*115;
@@ -286,7 +295,7 @@ function presentEvent(e){
  if(!e)return;
   if(e.type==='hit')for(let i=0;i<Math.max(3,e.lost);i++)particles.push({x:e.x,y:lanes[0]+e.y*115-30,vx:-65-Math.random()*110,vy:-150-Math.random()*100,life:.8,type:e.lost?'acorn':'dust'});
  const mine=inMultiplayer()?e.slot===localSlot():e.id===selected;
- if(mine){const messages={hit:e.lost?`どんぐり −${e.lost} · 減速`:'ぶつかった！ 減速',acorn:'どんぐり ＋1 · 加速！',gold:'金色どんぐり · 2倍速！',help:'お助けどんぐり · 加速！',helpSpawn:'お助けどんぐりが来たよ！',ramp:'ジャンプ台！'};if(messages[e.type]){$('status-text').textContent=messages[e.type];noticeUntil=backgroundClock+1.7;}}
+ if(mine){const messages={hit:e.lost?`どんぐり −${e.lost} · 減速`:'ぶつかった！ 減速',acorn:'どんぐり ＋1 · 加速！',gold:'金色どんぐり · 2倍速！',help:'お助けどんぐり · 加速！',helpSpawn:'お助けどんぐりが来たよ！',ramp:'ジャンプ台！'};const type=e.golden?'gold':e.type;if(messages[type]){$('status-text').textContent=messages[type];noticeUntil=backgroundClock+1.7;}}
 }
 function consumeEvents(){
  if(!race?.events)return;for(const e of race.events)presentEvent(e);
