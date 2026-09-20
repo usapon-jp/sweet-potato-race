@@ -95,17 +95,25 @@ function meadow(camera){
  // Foreground edge stays below the racers and touch buttons.
  ctx.fillStyle='#7db768';ctx.beginPath();ctx.moveTo(0,720);for(let x=0;x<=W;x+=10)ctx.lineTo(x,703+Math.sin((x+camera*.65)/48)*10);ctx.lineTo(W,H);ctx.fill();
 }
-function acorn(x,y,s=1){ctx.save();ctx.translate(x,y);ctx.rotate(.3);ctx.scale(s,s);ctx.strokeStyle='#715036';ctx.lineWidth=3;ellipse(0,0,13,18,'#cc934e');ctx.stroke();rounded(-17,-17,34,13,7,'#9f7045');ctx.stroke();ctx.beginPath();ctx.moveTo(0,-18);ctx.quadraticCurveTo(-2,-27,6,-27);ctx.stroke();ctx.restore();}
+function acorn(x,y,s=1,gold=false){ctx.save();ctx.translate(x,y);ctx.rotate(.3);ctx.scale(s,s);ctx.strokeStyle='#715036';ctx.lineWidth=3;ellipse(0,0,13,18,gold?'#ffe15c':'#cc934e');ctx.stroke();rounded(-17,-17,34,13,7,gold?'#dba62a':'#9f7045');ctx.stroke();ctx.beginPath();ctx.moveTo(0,-18);ctx.quadraticCurveTo(-2,-27,6,-27);ctx.stroke();ctx.restore();}
 function obstacle(it,camera){const x=it.x-camera,y=lanes[it.lane];if(x<-100||x>W+100||it.taken)return;
  if(it.type==='rock'){ellipse(x,y+8,32,8,'#77754935');ctx.fillStyle='#9a9e95';ctx.strokeStyle='#74766d';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x-31,y+7);ctx.lineTo(x-26,y-15);ctx.quadraticCurveTo(x-6,y-48,x+14,y-31);ctx.quadraticCurveTo(x+32,y-20,x+33,y+8);ctx.closePath();ctx.fill();ctx.stroke();ellipse(x-8,y-12,4,5,'#7e8279');ellipse(x+16,y-2,3,5,'#7e8279');}
  else if(it.type==='ramp'){ctx.fillStyle='#be864d';ctx.strokeStyle='#85623b';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x-44,y+7);ctx.lineTo(x+36,y-30);ctx.lineTo(x+36,y+7);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle='#fff1ad';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x-17,y-2);ctx.lineTo(x+11,y-15);ctx.stroke();}
- else{const bob=Math.sin(backgroundClock*5+it.id)*4;ellipse(x,y+7,14,4,'#9b84372b');acorn(x,y-24-(it.z||0)+bob,.9);}
+ else{
+  const fall=it.type==='help'?Math.max(0,1-(race.time-it.spawned)/.45)*90:0;
+  const cy=y-24-(it.z||0)+Math.sin(backgroundClock*5+it.id)*4-fall;
+  if(it.type==='gold')ellipse(x,cy,24,27,'#fff6a366');
+  if(it.type==='help'){ctx.save();ctx.globalAlpha=it.owner===selected?1:.4;ellipse(x,cy,25,28,'#e8ffebbb');ctx.strokeStyle='#599e59';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#396c42';ctx.font='bold 12px sans-serif';ctx.textAlign='center';ctx.fillText(it.owner===selected?'あなた用':'相手用',x,cy-34);}
+  ellipse(x,y+7,14,4,'#9b84372b');acorn(x,cy,.9,it.type==='gold');
+  if(it.type==='gold'){ctx.fillStyle='#80651a';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText('×2',x,cy-31);}
+  if(it.type==='help')ctx.restore();
+ }
 }
 function car(r,camera){const x=r.x-camera,y=lanes[0]+r.y*115;
  if(x<-160||x>W+160)return;
  ellipse(x,y+12,47-r.z*.06,9-r.z*.012,'#52664335');
  ctx.save();if(r.invincible>0&&Math.floor(backgroundClock*13)%2===0)ctx.globalAlpha=.52;
- if(r.boost>0){ctx.strokeStyle='#fff4a5';ctx.lineWidth=4;for(let i=0;i<3;i++){ctx.beginPath();ctx.moveTo(x-75-i*8,y-r.z-12+i*9);ctx.lineTo(x-102-i*12,y-r.z-12+i*9);ctx.stroke();}}
+ if(r.boost>0||r.gold>0){ctx.strokeStyle='#fff4a5';ctx.lineWidth=4;for(let i=0;i<3;i++){ctx.beginPath();ctx.moveTo(x-75-i*8,y-r.z-12+i*9);ctx.lineTo(x-102-i*12,y-r.z-12+i*9);ctx.stroke();}}
  const b=SPRITE_BOUNDS[r.id],height=130,width=b[2]/b[3]*height;
  const bounce=r.z>0?0:Math.sin(backgroundClock*19)*1.2;
  ctx.save();ctx.translate(x,0);ctx.scale(-1,1);
@@ -118,7 +126,7 @@ function finishLine(camera){const x=LENGTH-camera;if(x<-50||x>W+50)return;ctx.fi
 function consumeEvents(){
  for(const e of race.events){
   if(e.type==='hit')for(let i=0;i<Math.max(3,e.lost);i++)particles.push({x:e.x,y:lanes[0]+e.y*115-30,vx:-65-Math.random()*110,vy:-150-Math.random()*100,life:.8,type:e.lost?'acorn':'dust'});
-  if(e.id===selected){const messages={hit:e.lost?`どんぐり −${e.lost} · 減速`:'ぶつかった！ 減速',acorn:'どんぐり ＋1 · 加速！',ramp:'ジャンプ台！'};if(messages[e.type]){$('status-text').textContent=messages[e.type];noticeUntil=backgroundClock+1.7;}}
+  if(e.id===selected){const messages={hit:e.lost?`どんぐり −${e.lost} · 減速`:'ぶつかった！ 減速',acorn:'どんぐり ＋1 · 加速！',gold:'金色どんぐり · 2倍速！',help:'お助けどんぐり · 加速！',helpSpawn:'お助けどんぐりが来たよ！',ramp:'ジャンプ台！'};if(messages[e.type]){$('status-text').textContent=messages[e.type];noticeUntil=backgroundClock+1.7;}}
  }
  race.events.length=0;
 }
@@ -132,7 +140,7 @@ function render(){const camera=race?race.player.x-300:backgroundClock*18;meadow(
  // Opponent can leave the camera; show direction instead of hiding race information.
  const ox=race.opponent.x-camera;if(ox<40||ox>W-40){const x=ox<40?65:W-70;rounded(x-52,185,104,29,15,'#fff9e9e8');ctx.fillStyle='#625141';ctx.font='bold 15px sans-serif';ctx.textAlign='center';ctx.fillText(ox<40?'◀ 相手':'相手 ▶',x,205);}
  $('acorns').textContent=race.player.acorns;$('position').textContent=race.player.x>=race.opponent.x?'1位':'2位';
- $('speed-state').textContent=race.player.slow>0?'減速中':race.player.boost>0?'加速中！':'いつもの速さ';
+ $('speed-state').textContent=race.player.slow>0?'減速中':race.player.gold>0?'2倍速！':race.player.boost>0?'加速中！':'いつもの速さ';
  const pp=Math.min(100,race.player.x/LENGTH*100),op=Math.min(100,race.opponent.x/LENGTH*100);
  $('progress-fill').style.width=pp+'%';$('player-dot').style.left=pp+'%';$('rival-dot').style.left=op+'%';
  if(race.state==='countdown'){toggle('countdown',true);$('countdown').textContent=Math.ceil(race.countdown);}
