@@ -1,0 +1,18 @@
+name: Keep usapon-lab awake
+on:
+  schedule:
+    - cron: '0 0 * * 1,4' # 毎週月・木 9:00 JST
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Touch lab database
+        run: |
+          URL=$(grep -o 'https://[a-z0-9]*\.supabase\.co' runtime-config.js)
+          KEY=$(grep -o 'sb_publishable_[A-Za-z0-9_-]*' runtime-config.js)
+          curl -fsS -X POST "$URL/rest/v1/rpc/keepalive_ping" \
+            -H "apikey: $KEY" -H "Content-Type: application/json" -d '{}'
