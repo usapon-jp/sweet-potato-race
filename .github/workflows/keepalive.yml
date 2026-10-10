@@ -1,7 +1,7 @@
 name: Keep usapon-lab awake
 on:
   schedule:
-    - cron: '0 0 * * 1,4' # 毎週月・木 9:00 JST
+    - cron: '17 0,8,16 * * *' # 毎日 9:17・17:17・1:17 JST（Supabase は「1日に数回」の利用を目安にしている）
   workflow_dispatch:
 permissions:
   contents: read
